@@ -1,22 +1,34 @@
 module QuantumSavory
 
-export StateRef, RegRef, Register, RegisterNet
-
-#TODO you can not assume you can always in-place modify a state. Have all these functions work on stateref, not stateref[]
-# basically all ::QuantumOptics... should be turned into ::Ref{...}... but an abstract ref
+using Reexport
 
 using IterTools
 using LinearAlgebra
 using Graphs
-#using Infiltrator
 
+using QuantumInterface: basis, tensor, ⊗, apply!, traceout!,
+    AbstractOperator, AbstractKet, AbstractSuperOperator, Basis, SpinBasis
+
+export apply!, traceout!, removebackref!
+export project_traceout! #TODO should move to QuantumInterface
+
+@reexport using QuantumSymbolics
+using QuantumSymbolics:
+    AbstractRepresentation, AbstractUse,
+    CliffordRepr, QuantumOpticsRepr, QuantumMCRepr,
+    metadata, istree, operation, arguments, Symbolic, # from Symbolics
+    HGate, XGate, YGate, ZGate, CPHASEGate, CNOTGate,
+    XBasisState, YBasisState, ZBasisState,
+    STensorOperator, SScaledOperator, SAddOperator
+
+export StateRef, RegRef, Register, RegisterNet
 export Qubit, Qumode,
-       QuantumOpticsRepr, QuantumMCRepr, CliffordRepr,
-       UseAsState, UseAsObservable, UseAsOperation
+    CliffordRepr, QuantumOpticsRepr, QuantumMCRepr,
+    UseAsState, UseAsObservable, UseAsOperation
+#TODO you can not assume you can always in-place modify a state. Have all these functions work on stateref, not stateref[]
+# basically all ::QuantumOptics... should be turned into ::Ref{...}... but an abstract ref
 
 abstract type QuantumStateTrait end
-abstract type AbstractRepresentation end
-abstract type AbstractUse end
 abstract type AbstractBackground end
 
 """Specifies that a given register slot contains qubits."""
@@ -24,18 +36,10 @@ struct Qubit <: QuantumStateTrait end
 """Specifies that a given register slot contains qumodes."""
 struct Qumode <: QuantumStateTrait end
 
-"""Representation using kets, densinty matrices, and superoperators governed by `QuantumOptics.jl`."""
-struct QuantumOpticsRepr <: AbstractRepresentation end
-"""Similar to `QuantumOpticsRepr`, but using trajectories instead of superoperators."""
-struct QuantumMCRepr <: AbstractRepresentation end
-"""Representation using tableaux governed by `QuantumClifford.jl`"""
-struct CliffordRepr <: AbstractRepresentation end
+# TODO move these definitions to a neater place
+default_repr(::Qubit) = QuantumOpticsRepr()
+default_repr(::Qumode) = QuantumOpticsRepr()
 
-struct UseAsState <: AbstractUse end
-struct UseAsOperation <: AbstractUse end
-struct UseAsObservable <: AbstractUse end
-
-include("symbolics.jl")
 
 # TODO better constructors
 # TODO am I overusing Ref
@@ -61,7 +65,7 @@ struct Register # TODO better type description
 end
 Register(traits,reprs,bg,sr,si) = Register(traits,reprs,bg,sr,si,fill(0.0,length(traits)))
 Register(traits,reprs,bg) = Register(traits,reprs,bg,fill(nothing,length(traits)),fill(0,length(traits)),fill(0.0,length(traits)))
-Register(traits,bg::Vector{<:AbstractBackground}) = Register(traits,default_repr.(traits),bg,fill(nothing,length(traits)),fill(0,length(traits)),fill(0.0,length(traits)))
+Register(traits,bg::Vector{<:Union{Nothing,<:AbstractBackground}}) = Register(traits,default_repr.(traits),bg,fill(nothing,length(traits)),fill(0,length(traits)),fill(0.0,length(traits)))
 Register(traits,reprs::Vector{<:AbstractRepresentation}) = Register(traits,reprs,fill(nothing,length(traits)),fill(nothing,length(traits)),fill(0,length(traits)),fill(0.0,length(traits)))
 Register(traits) = Register(traits,default_repr.(traits),fill(nothing,length(traits)),fill(nothing,length(traits)),fill(0,length(traits)),fill(0.0,length(traits)))
 
@@ -117,6 +121,31 @@ function Base.setindex!(net::RegisterNet, val, ij::Tuple{Int,Int}, k::Symbol)
 end
 Base.getindex(net::RegisterNet, ij::Graphs.SimpleEdge, k::Symbol) = net[(ij.src, ij.dst),k]
 Base.setindex!(net::RegisterNet, val, ij::Graphs.SimpleEdge, k::Symbol) = begin net[(ij.src, ij.dst),k] = val end
+# Get and set with colon notation
+Base.getindex(net::RegisterNet, ::Colon) = net.registers
+Base.getindex(net::RegisterNet, ::Colon, j::Int) = [r[j] for r in net.registers]
+Base.getindex(net::RegisterNet, ::Colon, k::Symbol) = [m[k] for m in net.vertex_metadata]
+Base.getindex(net::RegisterNet, ::Tuple{Colon,Colon}, k::Symbol) = [net.edge_metadata[minmax(ij)...][k] for ij in edges(net)]
+function Base.setindex!(net::RegisterNet, v, ::Colon, k::Symbol)
+    for m in net.vertex_metadata
+        m[k] = v
+    end
+end
+function Base.setindex!(net::RegisterNet, v, ::Tuple{Colon,Colon}, k::Symbol)
+    for ij in edges(net)
+        net[ij,k] = v
+    end
+end
+function Base.setindex!(net::RegisterNet, @nospecialize(f::Function), ::Colon, k::Symbol)
+    for m in net.vertex_metadata
+        m[k] = f()
+    end
+end
+function Base.setindex!(net::RegisterNet, @nospecialize(f::Function), ::Tuple{Colon,Colon}, k::Symbol)
+    for ij in edges(net)
+        net[ij,k] = f()
+    end
+end
 
 ##
 
@@ -186,7 +215,8 @@ include("backends/quantumoptics/quantumoptics.jl")
 include("backends/clifford/clifford.jl")
 
 include("simjulia.jl")
-include("makie.jl")
+
+include("plots.jl")
 
 include("precompile.jl")
 

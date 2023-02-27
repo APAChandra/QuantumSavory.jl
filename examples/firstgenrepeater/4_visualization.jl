@@ -1,13 +1,14 @@
 include("setup.jl")
 
 using GLMakie # For plotting
+GLMakie.activate!()
 
 ##
 # Demo visualizations of the performance of the network
 ##
 sizes = [2,3,4,3,2]        # Number of qubits in each register
-T2 = 100.0                  # T2 dephasing time of all qubits
-F = 0.97                    # Fidelity of the raw Bell pairs
+T2 = 100.0                 # T2 dephasing time of all qubits
+F = 0.97                   # Fidelity of the raw Bell pairs
 entangler_wait_time = 0.1  # How long to wait if all qubits are busy before retring entangling
 entangler_busy_time = 1.0  # How long it takes to establish a newly entangled pair
 swapper_wait_time = 0.1    # How long to wait if all qubits are unavailable for swapping
@@ -33,7 +34,7 @@ for nodea in vertices(network)
 end
 
 fig = Figure(resolution=(800,400))
-subfig_rg, ax_rg, p_rn = registernetplot_axis(fig[1,1],network)
+_,ax,_,obs = registernetplot_axis(fig[1,1],network)
 
 ts = Observable(Float64[0])
 fidXX = Observable(Float64[0])
@@ -61,8 +62,8 @@ record(fig, "firstgenrepeater-07.observable.mp4", step_ts, framerate=10) do t
     push!(fidZZ[],fZZ)
     push!(ts[],t)
 
-    ax_rg.title = "t=$(t)"
-    notify(p_rn[1])
+    ax.title = "t=$(t)"
+    notify(obs)
     notify(ts)
     xlims!(ax_fid, 0, t+0.5)
 end

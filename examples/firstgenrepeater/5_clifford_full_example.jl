@@ -1,6 +1,7 @@
 include("clifford_setup.jl")
 
 using GLMakie # For plotting
+GLMakie.activate!()
 
 ##
 # Demo visualizations of the performance of the network
@@ -33,7 +34,7 @@ for nodea in vertices(network)
 end
 
 fig = Figure(resolution=(800,400))
-subfig_rg, ax_rg, p_rn = registernetplot_axis(fig[1,1],network)
+_,ax,_,obs = registernetplot_axis(fig[1,1],network)
 
 ts = Observable(Float64[0])
 fidXX = Observable(Float64[0])
@@ -61,8 +62,8 @@ record(fig, "firstgenrepeater-08.clifford.mp4", step_ts, framerate=10) do t
     push!(fidZZ[],fZZ)
     push!(ts[],t)
 
-    ax_rg.title = "t=$(t)"
-    notify(p_rn[1])
+    ax.title = "t=$(t)"
+    notify(obs)
     notify(ts)
     xlims!(ax_fid, 0, t+0.5)
 end

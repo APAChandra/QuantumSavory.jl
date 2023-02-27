@@ -1,5 +1,8 @@
 import QuantumOpticsBase
-import QuantumOpticsBase: GenericBasis, CompositeBasis, StateVector, basisstate, spinup, spindown, sigmap, sigmax, sigmay, sigmaz, projector, identityoperator, embed, dm, expect, ptrace
+import QuantumOpticsBase: GenericBasis, CompositeBasis,
+    StateVector, AbstractSuperOperator, Ket, Operator,
+    basisstate, spinup, spindown, sigmap, sigmax, sigmay, sigmaz, destroy,
+    projector, identityoperator, embed, dm, expect, ptrace, spre, spost
 import QuantumOptics
 import QuantumOptics: timeevolution
 
@@ -34,18 +37,6 @@ function observable(state::Union{<:Ket,<:Operator}, indices, operation)
     expect(op, state)
 end
 
-function apply!(state::Ket, indices, operation::Operator)
-    op = basis(state)==basis(operation) ? operation : embed(basis(state), indices, operation)
-    state.data = (op*state).data
-    state
-end
-
-function apply!(state::Operator, indices, operation::Operator)
-    op = basis(state)==basis(operation) ? operation : embed(basis(state), indices, operation)
-    state.data = (op*state*op').data
-    state
-end
-
 function project_traceout!(state::Union{Ket,Operator},stateindex,psis::Vector{<:Ket})
     if nsubsystems(state) == 1 # TODO is there a way to do this in a single function, instead of _overlap vs _project_and_drop
         _overlaps = [_overlap(psi,state) for psi in psis]
@@ -63,15 +54,22 @@ function project_traceout!(state::Union{Ket,Operator},stateindex,psis::Vector{<:
     end
 end
 
+const _l = copy(express(Z1, QuantumOpticsRepr()))
 function newstate(::Qubit,::QuantumOpticsRepr)
     copy(_l)
 end
 function newstate(::Qubit,::QuantumMCRepr)
     copy(_l)
 end
+const _vac = copy(express(F0, QuantumOpticsRepr()))
+function newstate(::Qumode,::QuantumOpticsRepr)
+    copy(_vac)
+end
+function newstate(::Qumode,::QuantumMCRepr)
+    copy(_vac)
+end
 
 include("should_upstream.jl")
 include("express.jl")
 include("uptotime.jl")
 include("noninstant.jl")
-include("clifford_interop.jl")
